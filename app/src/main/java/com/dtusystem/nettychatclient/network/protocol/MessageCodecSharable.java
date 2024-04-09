@@ -5,13 +5,18 @@ import static com.dtusystem.nettychatclient.network.utils.Utils.transformByteBuf
 
 import android.util.Log;
 
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
+
 import com.dtusystem.nettychatclient.network.PromiseContainer;
 import com.dtusystem.nettychatclient.network.message.Message;
+import com.dtusystem.nettychatclient.network.message.Response;
 import com.dtusystem.nettychatclient.network.utils.NetworkMsg;
 import com.dtusystem.nettychatclient.network.utils.PromiseWrapper;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 
+import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
@@ -27,6 +32,7 @@ public class MessageCodecSharable extends MessageToMessageCodec<ByteBuf, Network
     private final PromiseContainer promiseContainer = PromiseContainer.INSTANCE;
 
     private final Gson gson;
+
     {
         GsonBuilder gsonBuilder = new GsonBuilder();
         gson = gsonBuilder.create();
@@ -74,17 +80,57 @@ public class MessageCodecSharable extends MessageToMessageCodec<ByteBuf, Network
         Log.d(MessageCodecSharable.class.toString(), Message.Companion.getMessageClass(messageType).toString());
 
         String json = new String(bytes, StandardCharsets.UTF_8);
-        PromiseWrapper promiseWrapper = promiseContainer.getPromise(sequenceId);
-        if (promiseWrapper != null) {
-            Type type = promiseWrapper.getReturnType();
-            Message msg = gson.fromJson(json, type);
-            NetworkMsg networkMsg = new NetworkMsg(sequenceId, msg);
-            out.add(networkMsg);
-        } else {
-            Class<? extends Message> msgType = Message.Companion.getMessageClass(messageType);
-            Message msg = gson.fromJson(json, msgType);
-            NetworkMsg networkMsg = new NetworkMsg(sequenceId, msg);
-            out.add(networkMsg);
+        PromiseWrapper<?> promiseWrapper = promiseContainer.getPromise(sequenceId);
+        try {
+            if (promiseWrapper != null) {
+                // 如果函数的返回值不是Response，我们需要封装ParameterizedType进行反序列化
+                Type returnType = promiseWrapper.getReturnType();
+                if (!Response.Companion.isResponseType(returnType)) {
+                    returnType = new ParameterizedTypeImpl(returnType);
+                }
+                Message msg = gson.fromJson(json, returnType);
+                NetworkMsg networkMsg = new NetworkMsg(sequenceId, msg);
+                out.add(networkMsg);
+            } else {
+                Class<? extends Message> msgType = Message.Companion.getMessageClass(messageType);
+                Message msg = gson.fromJson(json, msgType);
+                NetworkMsg networkMsg = new NetworkMsg(sequenceId, msg);
+                out.add(networkMsg);
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    private static class ParameterizedTypeImpl implements ParameterizedType {
+        private final Type parameterizedType;
+
+        public ParameterizedTypeImpl(Type parameterizedType) {
+            this.parameterizedType = parameterizedType;
+        }
+
+        @NonNull
+        @Override
+        public Type[] getActualTypeArguments() {
+            return new Type[]{parameterizedType};
+        }
+
+        @NonNull
+        @Override
+        public Type getRawType() {
+            return Response.class;
+        }
+
+        @Nullable
+        @Override
+        public Type getOwnerType() {
+            return null;
+        }
+
+        @NonNull
+        @Override
+        public String getTypeName() {
+            return String.format("%s<%s>", Response.class.getName(), parameterizedType);
         }
     }
 }

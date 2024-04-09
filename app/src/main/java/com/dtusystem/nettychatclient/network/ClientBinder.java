@@ -14,7 +14,6 @@ import com.dtusystem.nettychatclient.network.handler.remote.RemoteRequestHandler
 import com.dtusystem.nettychatclient.network.message.Message;
 import com.dtusystem.nettychatclient.network.protocol.MessageCodecSharable;
 import com.dtusystem.nettychatclient.network.protocol.ProtocolLengthFieldDecoder;
-import com.dtusystem.nettychatclient.network.utils.Utils;
 
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
@@ -22,6 +21,7 @@ import java.lang.reflect.Parameter;
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Proxy;
 import java.lang.reflect.Type;
+import java.lang.reflect.WildcardType;
 import java.net.ConnectException;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.TimeUnit;
@@ -145,22 +145,23 @@ public class ClientBinder {
                     public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
                         Class<?>[] parameterTypes = method.getParameterTypes();
                         int length = parameterTypes.length;
-                        if (Utils.getRawType(parameterTypes[length - 1]) == Continuation.class) {
-                            Promise<Message> promise = new DefaultPromise<Message>(eventLoopGroup.next());
+                        Promise<Object> promise = new DefaultPromise<>(eventLoopGroup.next());
+                        if (length > 0 && parameterTypes[length - 1] == Continuation.class) {
                             Continuation continuation = (Continuation) args[length - 1];
                             if (isActive()) {
                                 Parameter parameterOfContinuation = method.getParameters()[length - 1];
                                 ParameterizedType parameterizedType = (ParameterizedType) parameterOfContinuation.getParameterizedType();
-                                Type innerType = parameterizedType.getActualTypeArguments()[0];
-                                PromiseWrapper promiseWrapper = new PromiseWrapper(innerType, promise);
+                                WildcardType wildcardType = (WildcardType) parameterizedType.getActualTypeArguments()[0];
+                                Type returnType = wildcardType.getLowerBounds()[0];
+                                PromiseWrapper promiseWrapper = new PromiseWrapper(returnType, promise);
                                 channel.writeAndFlush(new RequestWrapper((Message) args[0], promiseWrapper));
                                 return KotlinExtensionsKt.awaitForSuspend(promise, continuation);
                             }
                             ConnectException exception = new ConnectException("can not connect to the server");
                             return KotlinExtensionsKt.suspendAndThrow(exception, continuation);
-                        } else {
-                            Promise<Message> promise = new DefaultPromise<>(eventLoopGroup.next());
-                            Class<?> returnType = method.getReturnType();
+                        }
+                        if(method.getReturnType() == Promise.class){
+                            Type returnType = ((ParameterizedType) method.getGenericReturnType()).getActualTypeArguments()[0];
                             if (isActive()) {
                                 PromiseWrapper promiseWrapper = new PromiseWrapper(returnType, promise);
                                 channel.writeAndFlush(new RequestWrapper((Message) args[0], promiseWrapper));
@@ -168,6 +169,7 @@ public class ClientBinder {
                                 promise.setFailure(new ConnectException("can not connect to the server"));
                             return promise;
                         }
+                        throw new RuntimeException("Please use `Promise` class or use suspend function!!!");
                     }
                 }
         );

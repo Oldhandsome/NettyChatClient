@@ -2,7 +2,7 @@ package com.dtusystem.nettychatclient.network.utils;
 
 import com.dtusystem.nettychatclient.network.message.Message;
 
-public class RequestWrapper {
+public class RequestWrapper<T> {
 
     /**
      * 当前的请求
@@ -12,10 +12,10 @@ public class RequestWrapper {
     /**
      * 封装的响应
      * */
-    private PromiseWrapper promiseWrapper;
+    private PromiseWrapper<T> promiseWrapper;
 
 
-    public RequestWrapper(Message request, PromiseWrapper promiseWrapper) {
+    public RequestWrapper(Message request, PromiseWrapper<T> promiseWrapper) {
         this.request = request;
         this.promiseWrapper = promiseWrapper;
     }
@@ -24,7 +24,7 @@ public class RequestWrapper {
         return request;
     }
 
-    public PromiseWrapper getPromiseWrapper() {
+    public PromiseWrapper<T> getPromiseWrapper() {
         return promiseWrapper;
     }
 }

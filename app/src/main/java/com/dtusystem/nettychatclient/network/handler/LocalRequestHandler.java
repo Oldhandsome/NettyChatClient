@@ -3,11 +3,16 @@ package com.dtusystem.nettychatclient.network.handler;
 import android.util.Log;
 
 import com.dtusystem.nettychatclient.network.PromiseContainer;
+import com.dtusystem.nettychatclient.network.exception.MessageException;
 import com.dtusystem.nettychatclient.network.message.HeartBeat;
 import com.dtusystem.nettychatclient.network.message.Message;
+import com.dtusystem.nettychatclient.network.message.Response;
 import com.dtusystem.nettychatclient.network.utils.NetworkMsg;
+import com.dtusystem.nettychatclient.network.utils.PromiseWrapper;
 import com.dtusystem.nettychatclient.network.utils.RequestWrapper;
 
+import java.lang.reflect.ParameterizedType;
+import java.lang.reflect.Type;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import io.netty.channel.ChannelDuplexHandler;
@@ -20,7 +25,7 @@ import io.netty.util.ReferenceCountUtil;
 import io.netty.util.concurrent.Promise;
 
 /**
- * 本地请求的处理器（需要处理本地的请求，远程的响应）
+ * 本地请求的处理器（需要处理本地的请求，远程的响应；所有的响应的结构体都是Response<T>）
  */
 @ChannelHandler.Sharable
 public class LocalRequestHandler extends ChannelDuplexHandler {
@@ -74,10 +79,29 @@ public class LocalRequestHandler extends ChannelDuplexHandler {
             }
 
             int id = networkMsg.getId();
-            Promise<Message> promise = promiseContainer.removePromise(id).getPromise();
+            PromiseWrapper promiseWrapper = promiseContainer.removePromise(id);
+            Promise<Object> promise = promiseWrapper.getPromise();
+            Message message = networkMsg.getMessage();
             if (promise != null) {
-                promise.setSuccess(networkMsg.getMessage());
-                ReferenceCountUtil.release(msg);
+                if (message instanceof Response) {
+                    Response<?> response = (Response<?>) message;
+                    // 判断函数的返回结果是Response还是自定义的类型
+                    if (Response.Companion.isResponseType(promiseWrapper.getReturnType())) {
+                        promise.setSuccess(response);
+                    } else {
+                        boolean success = response.getSuccess();
+                        if (!success) {
+                            promise.setFailure(new MessageException(response.getReason()));
+                        } else {
+                            if (response.getData() != null)
+                                promise.setSuccess(response.getData());
+                            else
+                                promise.setFailure(new MessageException("the response is null!!!"));
+                        }
+                    }
+                    ReferenceCountUtil.release(msg);
+                } else
+                    throw new IllegalArgumentException("the class of response message is not a example of Response class ");
             } else {
                 ctx.fireChannelRead(msg);
             }

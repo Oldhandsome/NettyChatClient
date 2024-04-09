@@ -1,8 +1,7 @@
 package com.dtusystem.nettychatclient.network.utils
 
-import com.dtusystem.nettychatclient.network.exception.MessageException
-import com.dtusystem.nettychatclient.network.message.Message
-import com.dtusystem.nettychatclient.network.message.Response
+import io.netty.util.concurrent.Future
+import io.netty.util.concurrent.GenericFutureListener
 import io.netty.util.concurrent.Promise
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
@@ -13,25 +12,23 @@ import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
 
-suspend fun Promise<Message>.awaitForSuspend(): Message {
+suspend fun <T : Any> Promise<T>.awaitForSuspend(): T {
     return suspendCancellableCoroutine { continuation ->
         continuation.invokeOnCancellation {
             this@awaitForSuspend.cancel(true)
         }
-        this.addListener { future ->
-            val message = future.get()
-            if(message == null) {
-                continuation.resumeWithException(NullPointerException("Response from server is null!!!"))
-                return@addListener
+        this.addListener(object : GenericFutureListener<Future<in T>> {
+            override fun operationComplete(future: Future<in T>) {
+                if (future.isSuccess) {
+                    val result = future.get()
+                    if (result == null)
+                        continuation.resumeWithException(NullPointerException("Response from server is null!!!"))
+                    else
+                        continuation.resume(result as T)
+                } else
+                    continuation.resumeWithException(future.cause())
             }
-            val response = message as Response<*>
-            if (future.isSuccess && response.success) {
-                continuation.resume(response)
-                return@addListener
-            }else{
-                continuation.resumeWithException(MessageException(response.reason))
-            }
-        }
+        })
     }
 }
 

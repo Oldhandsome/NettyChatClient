@@ -1,24 +1,22 @@
 package com.dtusystem.nettychatclient.network.utils;
 
-import com.dtusystem.nettychatclient.network.message.Message;
-
 import java.lang.reflect.Type;
 
 import io.netty.util.concurrent.Promise;
 
-public class PromiseWrapper {
+public class PromiseWrapper<T> {
 
     /**
      * 返回值类型
-     * */
+     */
     private Type returnType;
 
     /**
      * Promise
-     * */
-    private Promise<Message> promise;
+     */
+    private Promise<T> promise;
 
-    public PromiseWrapper(Type returnType, Promise<Message> promise) {
+    public PromiseWrapper(Type returnType, Promise<T> promise) {
         this.returnType = returnType;
         this.promise = promise;
     }
@@ -27,7 +25,7 @@ public class PromiseWrapper {
         return returnType;
     }
 
-    public Promise<Message> getPromise() {
+    public Promise<T> getPromise() {
         return promise;
     }
 }

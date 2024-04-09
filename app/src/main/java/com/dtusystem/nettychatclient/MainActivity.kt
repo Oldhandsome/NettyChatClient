@@ -19,7 +19,6 @@ import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.viewModelScope
 import com.dtusystem.nettychatclient.network.ClientBinder
 import com.dtusystem.nettychatclient.network.message.Formula
-import com.dtusystem.nettychatclient.network.message.Technology
 import com.dtusystem.nettychatclient.repository.ExampleRepository
 import com.dtusystem.nettychatclient.ui.theme.NettyChatClientTheme
 import dagger.hilt.android.AndroidEntryPoint
@@ -51,8 +50,6 @@ class MainActivity : ComponentActivity() {
                 ) {
                     val formulaStr by viewModel.formula.collectAsState()
 
-                    val technologyStr by viewModel.technology.collectAsState()
-
                     Column {
                         Text(text = "Formula str" + formulaStr)
                         Button(onClick = {
@@ -67,14 +64,17 @@ class MainActivity : ComponentActivity() {
                             Text(text = "On Click Get Formula 2")
                         }
 
-                        Text(text = "Technology str" + technologyStr)
                         Button(onClick = {
-                            viewModel.issueTechnology(Technology(10, 20, 30))
+                            viewModel.issueFormula3(Formula(1, 2, 3, 1, 2, 3))
                         }) {
-                            Text(text = "On Click Get Technology")
+                            Text(text = "On Click Get Formula 3")
                         }
 
-
+                        Button(onClick = {
+                            viewModel.issueFormula4(Formula(1, 2, 3, 1, 2, 3))
+                        }) {
+                            Text(text = "On Click Get Formula 4")
+                        }
                     }
                 }
             }
@@ -112,33 +112,36 @@ class MainActivityViewModel @Inject constructor(
         }
     }
 
-    private val _technology = MutableStateFlow("")
-
-    val technology = _technology.asStateFlow()
-
-    fun issueTechnology(technology: Technology) = viewModelScope.launch(Dispatchers.IO) {
-        repository.issueTechnology(technology)
-            .addListener { future ->
-                if (future.isSuccess) {
-                    val message = future.get()
-                    println("on Click Get Technology Callback")
-                    println(message)
-
-                    _technology.value = message.toString()
-                } else {
-                    Log.e("TAG", future.cause().stackTraceToString())
-                }
-            }
-    }
-
     fun issueFormula2(formula: Formula) = viewModelScope.launch(Dispatchers.IO) {
         try {
             val response = repository.issueFormula2(formula)
             println("***************************")
             println(response.success)
             println(response.reason)
+            println("*************************")
         } catch (e: Exception) {
             println("---------------------1234---------------------")
+            e.printStackTrace()
+        }
+    }
+
+    fun issueFormula3(formula: Formula) = viewModelScope.launch(Dispatchers.IO) {
+        repository.issueFormula3(formula).addListener { future ->
+            if (future.isSuccess) {
+                Log.d("TAG", "issueFormula: ")
+                Log.d("TAG", "this is what i get ${future.get()}")
+            } else {
+                Log.e("TAG", future.cause().message ?: "暂无")
+            }
+        }
+    }
+
+    fun issueFormula4(formula: Formula) = viewModelScope.launch(Dispatchers.IO) {
+        try{
+            val str = repository.issueFormula4(this.coroutineContext, formula)
+            println("********************")
+            println(str)
+        }catch (e: Exception){
             e.printStackTrace()
         }
     }
