@@ -1,19 +1,27 @@
 package com.dtusystem.nettychatclient.network;
 
-import android.util.Log;
+import android.os.Build;
+
+import androidx.annotation.RequiresApi;
 
 import com.dtusystem.nettychatclient.network.handler.EventHandler;
 import com.dtusystem.nettychatclient.network.handler.LocalRequestHandler;
 import com.dtusystem.nettychatclient.network.handler.RemoteRequestHandlers;
-import com.dtusystem.nettychatclient.network.handler.RequestAndPromise;
+import com.dtusystem.nettychatclient.network.utils.KotlinExtensionsKt;
+import com.dtusystem.nettychatclient.network.utils.RequestWrapper;
+import com.dtusystem.nettychatclient.network.utils.PromiseWrapper;
 import com.dtusystem.nettychatclient.network.handler.remote.RemoteRequestHandler;
 import com.dtusystem.nettychatclient.network.message.Message;
 import com.dtusystem.nettychatclient.network.protocol.MessageCodecSharable;
 import com.dtusystem.nettychatclient.network.protocol.ProtocolLengthFieldDecoder;
+import com.dtusystem.nettychatclient.network.utils.Utils;
 
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
+import java.lang.reflect.Parameter;
+import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Proxy;
+import java.lang.reflect.Type;
 import java.net.ConnectException;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.TimeUnit;
@@ -39,7 +47,7 @@ public class ClientBinder {
 
     /**
      * 写超时的最大时间
-     * */
+     */
     private final int heartBeatInterval = 3;
 
     private final String ip;
@@ -51,13 +59,10 @@ public class ClientBinder {
      */
     private final LoggingHandler loggingHandler = new LoggingHandler(LogLevel.DEBUG);
     private final NioEventLoopGroup eventLoopGroup = new NioEventLoopGroup(4);
-    /**
+    private final RemoteRequestHandlers remoteRequestHandlers = new RemoteRequestHandlers();    /**
      * 重连的回调函数
      */
     private final EventHandler.ReconnectionCallback callback = this::startConnect;
-
-    private final RemoteRequestHandlers remoteRequestHandlers = new RemoteRequestHandlers();
-
     private final Bootstrap bootstrap;
     private ChannelFuture channelFuture;
     private Channel channel;
@@ -135,25 +140,31 @@ public class ClientBinder {
                 serviceClass.getClassLoader(),
                 new Class[]{serviceClass},
                 new InvocationHandler() {
+                    @RequiresApi(api = Build.VERSION_CODES.O)
                     @Override
                     public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
                         Class<?>[] parameterTypes = method.getParameterTypes();
-                        Class<?> returnType = method.getReturnType();
                         int length = parameterTypes.length;
                         if (Utils.getRawType(parameterTypes[length - 1]) == Continuation.class) {
                             Promise<Message> promise = new DefaultPromise<Message>(eventLoopGroup.next());
                             Continuation continuation = (Continuation) args[length - 1];
                             if (isActive()) {
-                                channel.writeAndFlush(new RequestAndPromise((Message) args[0], promise));
+                                Parameter parameterOfContinuation = method.getParameters()[length - 1];
+                                ParameterizedType parameterizedType = (ParameterizedType) parameterOfContinuation.getParameterizedType();
+                                Type innerType = parameterizedType.getActualTypeArguments()[0];
+                                PromiseWrapper promiseWrapper = new PromiseWrapper(innerType, promise);
+                                channel.writeAndFlush(new RequestWrapper((Message) args[0], promiseWrapper));
                                 return KotlinExtensionsKt.awaitForSuspend(promise, continuation);
                             }
                             ConnectException exception = new ConnectException("can not connect to the server");
                             return KotlinExtensionsKt.suspendAndThrow(exception, continuation);
                         } else {
                             Promise<Message> promise = new DefaultPromise<>(eventLoopGroup.next());
-                            if (isActive())
-                                channel.writeAndFlush(new RequestAndPromise((Message) args[0], promise));
-                            else
+                            Class<?> returnType = method.getReturnType();
+                            if (isActive()) {
+                                PromiseWrapper promiseWrapper = new PromiseWrapper(returnType, promise);
+                                channel.writeAndFlush(new RequestWrapper((Message) args[0], promiseWrapper));
+                            } else
                                 promise.setFailure(new ConnectException("can not connect to the server"));
                             return promise;
                         }
@@ -169,4 +180,6 @@ public class ClientBinder {
     public void removeRemoteRequestHandler(RemoteRequestHandler remoteRequestHandler) {
         remoteRequestHandlers.removeRemoteRequestHandle(remoteRequestHandler);
     }
+
+
 }

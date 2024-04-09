@@ -2,10 +2,12 @@ package com.dtusystem.nettychatclient.network.handler;
 
 import android.util.Log;
 
+import com.dtusystem.nettychatclient.network.PromiseContainer;
 import com.dtusystem.nettychatclient.network.message.HeartBeat;
 import com.dtusystem.nettychatclient.network.message.Message;
+import com.dtusystem.nettychatclient.network.utils.NetworkMsg;
+import com.dtusystem.nettychatclient.network.utils.RequestWrapper;
 
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import io.netty.channel.ChannelDuplexHandler;
@@ -23,10 +25,12 @@ import io.netty.util.concurrent.Promise;
 @ChannelHandler.Sharable
 public class LocalRequestHandler extends ChannelDuplexHandler {
 
+    private final PromiseContainer promiseContainer = PromiseContainer.INSTANCE;
+
     private final AtomicInteger idGenerator = new AtomicInteger(0);
 
     private final NetworkMsg heartBeat = new NetworkMsg(0, new HeartBeat());
-    private final ConcurrentHashMap<Integer, Promise<Message>> promiseMapper = new ConcurrentHashMap<>();
+
 
     @Override
     public void userEventTriggered(ChannelHandlerContext ctx, Object evt) {
@@ -44,14 +48,13 @@ public class LocalRequestHandler extends ChannelDuplexHandler {
 
     @Override
     public void write(ChannelHandlerContext ctx, Object msg, ChannelPromise promise) throws Exception {
-        if (msg instanceof RequestAndPromise) {
-            RequestAndPromise requestAndPromise = (RequestAndPromise) msg;
+        if (msg instanceof RequestWrapper) {
+            RequestWrapper requestWrapper = (RequestWrapper) msg;
             int id = idGenerator.incrementAndGet();
-            System.out.println("1 promise id "  + id);
-            if (requestAndPromise.getPromise() != null) {
-                promiseMapper.put(id, requestAndPromise.getPromise());
+            if (requestWrapper.getPromiseWrapper().getPromise() != null) {
+                promiseContainer.addPromise(id, requestWrapper.getPromiseWrapper());
             }
-            super.write(ctx, new NetworkMsg(id, requestAndPromise.getRequest()), promise);
+            super.write(ctx, new NetworkMsg(id, requestWrapper.getRequest()), promise);
         } else {
             Log.e(LocalRequestHandler.class.toString(), "the msg is null or unknown class");
             throw new IllegalArgumentException("the msg is null or unknown class");
@@ -71,7 +74,7 @@ public class LocalRequestHandler extends ChannelDuplexHandler {
             }
 
             int id = networkMsg.getId();
-            Promise<Message> promise = promiseMapper.remove(id);
+            Promise<Message> promise = promiseContainer.removePromise(id).getPromise();
             if (promise != null) {
                 promise.setSuccess(networkMsg.getMessage());
                 ReferenceCountUtil.release(msg);

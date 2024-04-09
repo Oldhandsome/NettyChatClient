@@ -12,14 +12,14 @@ import javax.inject.Inject
 class ExampleRepository @Inject constructor(
     private val exampleService: ExampleService,
 ) {
-    fun issueFormula(formula: Formula): Promise<Response> {
+    fun issueFormula(formula: Formula): Promise<Response<*>> {
         return exampleService.issueFormula(formula)
     }
 
-    fun issueTechnology(technology: Technology): Promise<Response> {
+    fun issueTechnology(technology: Technology): Promise<Response<*>> {
         return exampleService.issueTechnology(technology)
     }
 
-    suspend fun issueFormula2(formula: Formula): Response = exampleService.issueFormula2(formula)
+    suspend fun issueFormula2(formula: Formula): Response<*> = exampleService.issueFormula2(formula)
 
 }

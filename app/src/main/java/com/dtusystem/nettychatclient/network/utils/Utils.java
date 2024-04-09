@@ -1,4 +1,4 @@
-package com.dtusystem.nettychatclient.network;
+package com.dtusystem.nettychatclient.network.utils;
 
 import static io.netty.buffer.ByteBufUtil.appendPrettyHexDump;
 import static io.netty.util.internal.StringUtil.NEWLINE;
@@ -14,7 +14,7 @@ import java.util.Objects;
 import io.netty.buffer.ByteBuf;
 
 public class Utils {
-    static Class<?> getRawType(Type type) {
+    public static Class<?> getRawType(Type type) {
         Objects.requireNonNull(type, "type == null");
 
         if (type instanceof Class<?>) {

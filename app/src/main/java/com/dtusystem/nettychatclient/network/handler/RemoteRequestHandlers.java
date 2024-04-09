@@ -6,6 +6,7 @@ import android.util.Log;
 
 import com.dtusystem.nettychatclient.network.handler.remote.RemoteRequestHandler;
 import com.dtusystem.nettychatclient.network.message.Message;
+import com.dtusystem.nettychatclient.network.utils.NetworkMsg;
 
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;

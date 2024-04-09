@@ -1,4 +1,4 @@
-package com.dtusystem.nettychatclient.network.handler;
+package com.dtusystem.nettychatclient.network.utils;
 
 import com.dtusystem.nettychatclient.network.message.Message;
 

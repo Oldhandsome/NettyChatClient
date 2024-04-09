@@ -1,4 +1,4 @@
-package com.dtusystem.nettychatclient.network
+package com.dtusystem.nettychatclient.network.utils
 
 import com.dtusystem.nettychatclient.network.exception.MessageException
 import com.dtusystem.nettychatclient.network.message.Message
@@ -24,7 +24,7 @@ suspend fun Promise<Message>.awaitForSuspend(): Message {
                 continuation.resumeWithException(NullPointerException("Response from server is null!!!"))
                 return@addListener
             }
-            val response = message as Response
+            val response = message as Response<*>
             if (future.isSuccess && response.success) {
                 continuation.resume(response)
                 return@addListener

@@ -1,15 +1,19 @@
 package com.dtusystem.nettychatclient.network.protocol;
 
 
-import static com.dtusystem.nettychatclient.network.Utils.transformByteBuf2String;
+import static com.dtusystem.nettychatclient.network.utils.Utils.transformByteBuf2String;
 
 import android.util.Log;
 
-import com.dtusystem.nettychatclient.network.handler.NetworkMsg;
+import com.dtusystem.nettychatclient.network.PromiseContainer;
 import com.dtusystem.nettychatclient.network.message.Message;
-import com.dtusystem.nettychatclient.network.serializer.JsonSerializer;
-import com.dtusystem.nettychatclient.network.serializer.Serializer;
+import com.dtusystem.nettychatclient.network.utils.NetworkMsg;
+import com.dtusystem.nettychatclient.network.utils.PromiseWrapper;
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
 
+import java.lang.reflect.Type;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 
 import io.netty.buffer.ByteBuf;
@@ -20,8 +24,13 @@ import io.netty.handler.codec.MessageToMessageCodec;
 
 @ChannelHandler.Sharable
 public class MessageCodecSharable extends MessageToMessageCodec<ByteBuf, NetworkMsg> {
+    private final PromiseContainer promiseContainer = PromiseContainer.INSTANCE;
 
-    private final Serializer serializer = new JsonSerializer();
+    private final Gson gson;
+    {
+        GsonBuilder gsonBuilder = new GsonBuilder();
+        gson = gsonBuilder.create();
+    }
 
     @Override
     protected void encode(ChannelHandlerContext ctx, NetworkMsg networkMsg, List<Object> outList) throws Exception {
@@ -39,7 +48,7 @@ public class MessageCodecSharable extends MessageToMessageCodec<ByteBuf, Network
         // 无意义，对齐填充
         out.writeByte(0xff);
         // 6. 获取内容的字节数组
-        byte[] bytes = serializer.serialize(networkMsg.getMessage());
+        byte[] bytes = gson.toJson(networkMsg.getMessage()).getBytes(StandardCharsets.UTF_8);
         // 7. 长度
         out.writeInt(bytes.length);
         // 8. 写入内容
@@ -64,9 +73,18 @@ public class MessageCodecSharable extends MessageToMessageCodec<ByteBuf, Network
         Log.d(MessageCodecSharable.class.toString(), String.format("%d, %d, %d", messageType, sequenceId, length));
         Log.d(MessageCodecSharable.class.toString(), Message.Companion.getMessageClass(messageType).toString());
 
-        Class<? extends Message> msgType = Message.Companion.getMessageClass(messageType);
-        Message msg = serializer.deserialize(msgType, bytes);
-        NetworkMsg networkMsg = new NetworkMsg(sequenceId, msg);
-        out.add(networkMsg);
+        String json = new String(bytes, StandardCharsets.UTF_8);
+        PromiseWrapper promiseWrapper = promiseContainer.getPromise(sequenceId);
+        if (promiseWrapper != null) {
+            Type type = promiseWrapper.getReturnType();
+            Message msg = gson.fromJson(json, type);
+            NetworkMsg networkMsg = new NetworkMsg(sequenceId, msg);
+            out.add(networkMsg);
+        } else {
+            Class<? extends Message> msgType = Message.Companion.getMessageClass(messageType);
+            Message msg = gson.fromJson(json, msgType);
+            NetworkMsg networkMsg = new NetworkMsg(sequenceId, msg);
+            out.add(networkMsg);
+        }
     }
 }

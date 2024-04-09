@@ -1,6 +1,8 @@
 package com.dtusystem.nettychatclient.network.serializer;
 
 
+import java.lang.reflect.Type;
+
 public interface Serializer {
     /**
      * 反序列化
