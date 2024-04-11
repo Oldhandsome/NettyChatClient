@@ -1,5 +1,6 @@
 package com.dtusystem.nettychatclient.network.message
 
+import com.dtusystem.nettychatclient.network.exception.MessageException
 import java.lang.reflect.ParameterizedType
 import java.lang.reflect.Type
 
@@ -15,11 +16,22 @@ data class Response<T>(
         return RESPONSE
     }
 
-    companion object{
+    companion object {
         fun isResponseType(type: Type): Boolean {
             return type is ParameterizedType && type.rawType === Response::class.java
         }
     }
 
+    fun getOrNull(): T? {
+        return if (this.success) {
+            this.data
+        } else null
+    }
+
+    fun getOrThrow(): T? {
+        if (this.success)
+            return this.data
+        throw MessageException(this.reason)
+    }
 }
 
